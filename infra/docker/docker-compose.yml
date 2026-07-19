@@ -1,0 +1,222 @@
+services:
+  redpanda:
+    image: docker.redpanda.com/redpandadata/redpanda:v23.3.5
+    container_name: parking-redpanda
+    restart: unless-stopped
+    command:
+      - redpanda
+      - start
+      - --smp=1
+      - --memory=512M
+      - --overprovisioned
+      - --node-id=0
+      - --check=false
+      - --kafka-addr=PLAINTEXT://0.0.0.0:9092
+      - --advertise-kafka-addr=PLAINTEXT://redpanda:9092
+    ports:
+      - "9092:9092"
+    healthcheck:
+      test: ["CMD-SHELL", "rpk cluster health | grep -q 'Healthy:.*true'"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 20s
+
+  auth-service:
+    build:
+      context: ../..
+      dockerfile: services/auth-service/Dockerfile
+    container_name: parking-auth-service
+    restart: unless-stopped
+    env_file:
+      - ./.env
+    environment:
+      PORT: 4001
+      MONGO_URI: ${MONGO_URI_BASE}/auth-db?retryWrites=true&w=majority&appName=Cluster0
+      KAFKA_BROKERS: redpanda:9092
+      KAFKA_CLIENT_ID: auth-service
+      CORS_ORIGIN: "*"
+    ports:
+      - "4001:4001"
+    depends_on:
+      redpanda:
+        condition: service_healthy
+
+  parking-core-service:
+    build:
+      context: ../..
+      dockerfile: services/parking-core-service/Dockerfile
+    container_name: parking-core-service
+    restart: unless-stopped
+    env_file:
+      - ./.env
+    environment:
+      PORT: 4002
+      MONGO_URI: ${MONGO_URI_BASE}/parking-core-db?retryWrites=true&w=majority&appName=Cluster0
+      KAFKA_BROKERS: redpanda:9092
+      KAFKA_CLIENT_ID: parking-core-service
+      KAFKA_GROUP_ID: parking-core-service-group
+      CORS_ORIGIN: "*"
+    ports:
+      - "4002:4002"
+    depends_on:
+      redpanda:
+        condition: service_healthy
+      auth-service:
+        condition: service_started
+
+  vehicle-records-service:
+    build:
+      context: ../..
+      dockerfile: services/vehicle-records-service/Dockerfile
+    container_name: parking-vehicle-records-service
+    restart: unless-stopped
+    env_file:
+      - ./.env
+    environment:
+      PORT: 4003
+      MONGO_URI: ${MONGO_URI_BASE}/vehicle-records-db?retryWrites=true&w=majority&appName=Cluster0
+      KAFKA_BROKERS: redpanda:9092
+      KAFKA_CLIENT_ID: vehicle-records-service
+      KAFKA_GROUP_ID: vehicle-records-service-group
+      PARKING_CORE_SERVICE_URL: http://parking-core-service:4002
+      CORS_ORIGIN: "*"
+    ports:
+      - "4003:4003"
+    depends_on:
+      redpanda:
+        condition: service_healthy
+      auth-service:
+        condition: service_started
+      parking-core-service:
+        condition: service_started
+
+  camera-service:
+    build:
+      context: ../..
+      dockerfile: services/camera-service/Dockerfile
+    container_name: parking-camera-service
+    restart: unless-stopped
+    env_file:
+      - ./.env
+    environment:
+      PORT: 4004
+      MONGO_URI: ${MONGO_URI_BASE}/camera-db?retryWrites=true&w=majority&appName=Cluster0
+      KAFKA_BROKERS: redpanda:9092
+      KAFKA_CLIENT_ID: camera-service
+      KAFKA_GROUP_ID: camera-service-group
+      CV_SERVICE_URL: http://cv-service:8000
+      CORS_ORIGIN: "*"
+    ports:
+      - "4004:4004"
+    depends_on:
+      redpanda:
+        condition: service_healthy
+      auth-service:
+        condition: service_started
+      parking-core-service:
+        condition: service_started
+
+  pricing-billing-service:
+    build:
+      context: ../..
+      dockerfile: services/pricing-billing-service/Dockerfile
+    container_name: parking-pricing-billing-service
+    restart: unless-stopped
+    env_file:
+      - ./.env
+    environment:
+      PORT: 4005
+      MONGO_URI: ${MONGO_URI_BASE}/pricing-db?retryWrites=true&w=majority&appName=Cluster0
+      KAFKA_BROKERS: redpanda:9092
+      KAFKA_CLIENT_ID: pricing-billing-service
+      KAFKA_GROUP_ID: pricing-billing-service-group
+      CORS_ORIGIN: "*"
+    ports:
+      - "4005:4005"
+    depends_on:
+      redpanda:
+        condition: service_healthy
+      auth-service:
+        condition: service_started
+
+  cv-service:
+    build:
+      context: ../..
+      dockerfile: cv-service/Dockerfile
+    container_name: parking-cv-service
+    restart: unless-stopped
+    env_file:
+      - ./.env
+    environment:
+      PORT: 8000
+      CAMERA_SERVICE_URL: http://camera-service:4004
+      PLATE_RECOGNIZER_TOKEN: ${PLATE_RECOGNIZER_TOKEN:-}
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      OPENAI_VISION_MODEL: ${OPENAI_VISION_MODEL:-gpt-4o-mini}
+    ports:
+      - "8000:8000"
+    depends_on:
+      camera-service:
+        condition: service_started
+
+  realtime-service:
+    build:
+      context: ../..
+      dockerfile: services/realtime-service/Dockerfile
+    container_name: parking-realtime-service
+    restart: unless-stopped
+    env_file:
+      - ./.env
+    environment:
+      PORT: 4010
+      KAFKA_BROKERS: redpanda:9092
+      KAFKA_CLIENT_ID: realtime-service
+      KAFKA_GROUP_ID: realtime-service-group
+      CORS_ORIGIN: "*"
+    ports:
+      - "4010:4010"
+    depends_on:
+      redpanda:
+        condition: service_healthy
+
+  api-gateway:
+    build:
+      context: ../..
+      dockerfile: services/api-gateway/Dockerfile
+    container_name: parking-api-gateway
+    restart: unless-stopped
+    env_file:
+      - ./.env
+    environment:
+      PORT: 8080
+      AUTH_SERVICE_URL: http://auth-service:4001
+      PARKING_CORE_SERVICE_URL: http://parking-core-service:4002
+      VEHICLE_RECORDS_SERVICE_URL: http://vehicle-records-service:4003
+      CAMERA_SERVICE_URL: http://camera-service:4004
+      PRICING_BILLING_SERVICE_URL: http://pricing-billing-service:4005
+      REALTIME_SERVICE_URL: http://realtime-service:4010
+      CORS_ORIGIN: "*"
+    ports:
+      - "8080:8080"
+    depends_on:
+      - auth-service
+      - parking-core-service
+      - vehicle-records-service
+      - camera-service
+      - pricing-billing-service
+      - realtime-service
+
+  frontend:
+    build:
+      context: ../..
+      dockerfile: frontend/Dockerfile
+    container_name: parking-frontend
+    restart: unless-stopped
+    environment:
+      VITE_API_BASE_URL: http://localhost:8080/api
+      VITE_REALTIME_URL: http://localhost:4010
+    ports:
+      - "5173:5173"
+    depends_on:
+      - api-gateway

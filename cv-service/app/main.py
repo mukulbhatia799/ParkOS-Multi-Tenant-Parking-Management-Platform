@@ -1,0 +1,11 @@
+from fastapi import FastAPI
+
+from .routes import router
+
+app = FastAPI(title="cv-service")
+app.include_router(router)
+
+
+@app.get("/health")
+async def health():
+    return {"status": "ok", "service": "cv-service"}

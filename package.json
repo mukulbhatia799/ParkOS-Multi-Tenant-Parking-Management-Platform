@@ -1,0 +1,18 @@
+{
+  "name": "parking-saas",
+  "private": true,
+  "version": "1.0.0",
+  "workspaces": [
+    "shared",
+    "services/*",
+    "frontend"
+  ],
+  "scripts": {
+    "build": "npm run build --workspaces --if-present",
+    "dev:gateway": "npm run dev -w services/api-gateway",
+    "dev:auth": "npm run dev -w services/auth-service",
+    "dev:parking-core": "npm run dev -w services/parking-core-service",
+    "dev:realtime": "npm run dev -w services/realtime-service",
+    "dev:frontend": "npm run dev -w frontend"
+  }
+}
