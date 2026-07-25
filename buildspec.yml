@@ -1,0 +1,36 @@
+version: 0.2
+
+env:
+  variables:
+    AWS_ACCOUNT_ID: "130063747438"
+    AWS_REGION: "ap-south-1"
+
+phases:
+  pre_build:
+    commands:
+      - echo Logging in to Amazon ECR...
+      - aws ecr get-login-password --region $AWS_REGION | docker login --username AWS --password-stdin $AWS_ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com
+      - export REPO_PREFIX=$AWS_ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com
+  build:
+    commands:
+      - echo Build started on `date`
+      - docker build -f services/auth-service/Dockerfile -t $REPO_PREFIX/parkos/auth-service:latest .
+      - docker build -f services/parking-core-service/Dockerfile -t $REPO_PREFIX/parkos/parking-core-service:latest .
+      - docker build -f services/vehicle-records-service/Dockerfile -t $REPO_PREFIX/parkos/vehicle-records-service:latest .
+      - docker build -f services/camera-service/Dockerfile -t $REPO_PREFIX/parkos/camera-service:latest .
+      - docker build -f services/pricing-billing-service/Dockerfile -t $REPO_PREFIX/parkos/pricing-billing-service:latest .
+      - docker build -f cv-service/Dockerfile -t $REPO_PREFIX/parkos/cv-service:latest .
+      - docker build -f services/realtime-service/Dockerfile -t $REPO_PREFIX/parkos/realtime-service:latest .
+      - docker build -f services/api-gateway/Dockerfile -t $REPO_PREFIX/parkos/api-gateway:latest .
+  post_build:
+    commands:
+      - echo Pushing images to ECR...
+      - docker push $REPO_PREFIX/parkos/auth-service:latest
+      - docker push $REPO_PREFIX/parkos/parking-core-service:latest
+      - docker push $REPO_PREFIX/parkos/vehicle-records-service:latest
+      - docker push $REPO_PREFIX/parkos/camera-service:latest
+      - docker push $REPO_PREFIX/parkos/pricing-billing-service:latest
+      - docker push $REPO_PREFIX/parkos/cv-service:latest
+      - docker push $REPO_PREFIX/parkos/realtime-service:latest
+      - docker push $REPO_PREFIX/parkos/api-gateway:latest
+      - echo Build completed on `date`
