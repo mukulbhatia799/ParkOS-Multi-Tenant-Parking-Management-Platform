@@ -1,5 +1,7 @@
 # ParkOS — Multi-Tenant Smart Parking Management Platform
 
+🔗 **Live Demo:** [ParkOS Live](https://d2zr6d2ywvk7is.cloudfront.net/login)
+
 ParkOS is a multi-tenant, event-driven smart parking management platform that automates the complete parking workflow — from vehicle entry and license plate recognition to intelligent slot allocation, real-time occupancy tracking, vehicle exit, and automated billing.
 
 ## Features
